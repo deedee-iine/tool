@@ -407,6 +407,8 @@ tr:last-child td{border-bottom:none}
 </div><!-- /app -->
 <script>
 const S={games:0,big:0,reg:0,bell:0,suika:0,suikaReg:0,retro:0,side:[0,0,0,0,0],hibBig:[0,0,0,0,0],hibReg:[0,0,0,0]};
+let stgEnabled=[true,true,true,true,true];
+let lsCollapsed=false;
 const SNAMES=['設定1','設定2','設定3','設定4','設定V'];
 const SCOLS=['#aaa','#4a9eff','#f0c040','#50d060','#ff8820'];
 const BIG_P=[1/299,1/291,1/281,1/268,1/253];
@@ -538,7 +540,7 @@ function syncL(){
 
 function lm(obs,probs){let s=0;for(let i=0;i<obs.length;i++)if(probs[i]>0&&obs[i]>0)s+=obs[i]*Math.log(probs[i]);return s}
 
-function calc(){
+function calc(){try{
   const {games,big,reg,bell,suika,suikaReg,retro,side,hibBig,hibReg}=S;
   const bonus=big+reg,totalG=games+bonus;
   const has=totalG>0||bell>0||suika>0||suikaReg>0||retro>0||side.some(v=>v>0)||hibBig.some(v=>v>0)||hibReg.some(v=>v>0);
@@ -639,7 +641,8 @@ function calc(){
   else{comment='判定中…データを増やしてください';sub=''}
   se('rComment').textContent=comment;
   se('rCommentSub').textContent=sub;
-}
+  saveState();
+}catch(e){console.error('calc error:',e);}}
 
 renderAll();
 [['bg-m','games',-1],['bg-p','games',1],['bb-m','big',-1],['bb-p','big',1],['br-m','reg',-1],['br-p','reg',1],
@@ -677,8 +680,6 @@ function loadState(){
     ids.forEach((id,i)=>{
       const cb=document.getElementById('stg-chk-'+id);
       if(cb)cb.checked=stgEnabled[i];
-      const ne=document.getElementById('stg-num-'+id);
-      if(ne)ne.value=stgWeights[i];
     });
     calcStg();
     syncL();
@@ -686,24 +687,13 @@ function loadState(){
   }catch(e){}
 }
 
-// 保存タイミング: calc後に毎回保存
-const _origCalc = calc;
-// calcの末尾で保存するためwrap
-const _calcOrig = calc;
-function calcAndSave(){_calcOrig(); saveState();}
-// calcをcalcAndSaveで上書き
-window.calc = calcAndSave;
-
-// 既存のbindBtn・chはcalcを直接呼ぶので、calcをグローバル上書き
-// ch・blurInput内のcalc()を差し替え
-const _ch = ch;
-window.ch = function(key,d){S[key]=Math.max(0,S[key]+d);const el=document.getElementById(KEY_ID[key]||'v-'+key);if(el)el.value=S[key];window.calc();}
-window.blurInput = function(key,inp){const v=parseInt(inp.value,10);S[key]=isNaN(v)||v<0?0:v;inp.value=S[key];window.calc();}
-window.chArr = function(key,idx,d){S[key][idx]=Math.max(0,S[key][idx]+d);syncL();window.calc();}
+window.ch = function(key,d){S[key]=Math.max(0,S[key]+d);const el=document.getElementById(KEY_ID[key]||'v-'+key);if(el)el.value=S[key];calc();}
+window.blurInput = function(key,inp){const v=parseInt(inp.value,10);S[key]=isNaN(v)||v<0?0:v;inp.value=S[key];calc();}
+window.chArr = function(key,idx,d){S[key][idx]=Math.max(0,S[key][idx]+d);syncL();calc();}
 window.resetAll = function(){
   ['games','big','reg','bell','suika','suikaReg','retro'].forEach(k=>{S[k]=0;const el=document.getElementById(KEY_ID[k]||'v-'+k);if(el)el.value=0});
   ['side','hibBig','hibReg'].forEach(k=>{S[k]=S[k].map(()=>0)});
-  syncL();window.calc();
+  syncL();calc();
   // 設定状況リセット
   stgEnabled=[true,true,true,true,true];
   ['1','2','3','4','V'].forEach(id=>{
@@ -717,7 +707,6 @@ loadState();
 if(!localStorage.getItem('nkhv_state')){calcStg();calc();}
 
 // 設定状況（事前確率）
-let stgEnabled=[true,true,true,true,true];
 
 function calcStg(){
   const ids=['1','2','3','4','V'];
@@ -734,7 +723,7 @@ function calcStg(){
     if(!stgEnabled[i]){el.textContent='除外';el.style.color='#555';}
     else{el.textContent=pct+'%';el.style.color='#888';}
   });
-  window.calc();
+  calc();
 }
 function getPrior(){
   const cnt=stgEnabled.filter(Boolean).length;
@@ -742,7 +731,6 @@ function getPrior(){
 }
 
 // 左パネル折りたたみ
-let lsCollapsed = false;
 function toggleLeftPanel(){
   const st = document.querySelector('.sticky-top');
   const btn = document.getElementById('lsToggleBtn');
